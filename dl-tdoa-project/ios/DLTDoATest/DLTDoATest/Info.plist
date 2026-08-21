@@ -1,0 +1,10 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>NSLocationWhenInUseUsageDescription</key>
+    <string>Ứng dụng cần quyền vị trí để nhận phép đo UWB DL-TDoA từ các anchor trong khu vực.</string>
+    <key>NSNearbyInteractionUsageDescription</key>
+    <string>Ứng dụng sử dụng Nearby Interaction để thử nghiệm định vị DL-TDoA.</string>
+</dict>
+</plist>
