@@ -1,0 +1,432 @@
+<html lang="en">
+
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+    <title>Update Firmware</title>
+
+    <script>
+        function onBodyLoad() {
+            let table = document.getElementById('tableId');
+            resizableGrid(table);
+        }
+
+        function resizableGrid(e) {
+            var t = e.getElementsByClassName("trResize")[0], n = t ? t.children : void 0; if (n) {
+                e.style.overflow = "hidden"; for (var i = e.offsetHeight, o = 0; o < n.length; o++) { var r = s(i); n[o].appendChild(r), n[o].style.position = "relative", d(r) }
+            }
+            function d(e) {
+                var t, n, i, o, r; e.addEventListener("mousedown", function (e) {
+                    n = e.target.parentElement, i = n.nextElementSibling, t = e.pageX; var d = function (e) {
+                        if ("border-box" == l(e, "box-sizing")) return 0; var t = l(e, "padding-left"), n = l(e, "padding-right"); return parseInt(t) + parseInt(n)
+                    }(n); o = n.offsetWidth - d, i && (r = i.offsetWidth - d)
+                }), e.addEventListener("mouseover",
+                    function (e) { }), e.addEventListener("mouseout",
+                        function (e) { e.target.style.borderRight = "" }), document.addEventListener("mousemove",
+                            function (e) { if (n) { var d = e.pageX - t; i && (i.style.width = r - d + "px"), n.style.width = o + d + "px" } }),
+                    document.addEventListener("mouseup",
+                        function (e) { n = void 0, i = void 0, t = void 0, r = void 0, o = void 0 })
+            }
+            function s(e) {
+                var t = document.createElement("div");
+
+                t.classList.add('div_resize');
+                return t;
+            } function l(e, t) {
+                return window.getComputedStyle(e, null).getPropertyValue(t)
+            }
+        }
+
+    </script>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        .table_reize {
+            border-collapse: collapse;
+        }
+
+        .table_reizetd,
+        .table_reizeth {
+            padding: 5px 15px;
+            text-align: left;
+            padding: 0px
+        }
+
+        .table_reize,
+        .table_reizetd,
+        .table_reizeth {
+            border: 1px solid #000;
+        }
+
+        .header {
+            position: absolute;
+            width: 100%;
+            height: 90px;
+            z-index: 2;
+        }
+
+        .line_header {
+            height: 5px;
+            width: 100%;
+            background-color: #d0d0d0;
+            position: absolute;
+            z-index: 3;
+            top: 90px;
+            border-bottom: solid 1px black;
+        }
+
+        .div_resize {
+            top: 0px;
+            right: 0px;
+            width: 5px;
+            position: absolute;
+            cursor: col-resize;
+            user-select: none;
+            height: 100%;
+            background-color: #d0d0d0;
+        }
+
+        .div_left_menu {
+            background-color: #424242;
+            height: 22px;
+            margin-top: 2px;
+            font-size: 12px;
+            font-family: Arial;
+            line-height: 22px;
+            font-weight: 700;
+            color: white
+        }
+
+        .div_left_menu>a,
+        .div_left_menu_level2>a,
+        .div_active>a {
+            padding-left: 23px
+        }
+
+        .div_left_menu>a:hover,
+        .div_left_menu_level2>a:hover,
+        .div_active>a:hover {
+            color: #3c8dbc;
+            cursor: pointer
+        }
+
+        .div_left_menu_level2 {
+            background-color: #606060;
+            height: 22px;
+            margin-top: 2px;
+            font-size: 12px;
+            font-family: Arial;
+            line-height: 22px;
+            font-weight: 700;
+            color: white
+        }
+
+        .div_left_menu>a,
+        .div_active>a {
+            color: white;
+            text-decoration: none;
+        }
+
+        .div_active {
+            background-color: #2d6c91;
+            height: 22px;
+            margin-top: 2px;
+            font-size: 12px;
+            font-family: Arial;
+            line-height: 22px;
+            font-weight: 700;
+            color: white
+        }
+
+        .tablevalue {
+            font-size: 12px
+        }
+
+        .tablevalue>tbody>tr {
+            height: 30px;
+        }
+
+        .lable {
+            padding-right: 30px;
+            font-weight: bold;
+            width: 500px;
+        }
+
+        .tablevalue>tbody>tr>td>select {
+            width: 200px;
+        }
+
+        .tablevalue>tbody>tr>td>input {
+            width: 200px;
+        }
+
+        .div_left_menu>a {
+            display: block;
+            width: 100%
+        }
+
+        body {
+            margin: 0px;
+        }
+
+        #header {
+            font-size: 16px;
+            background-color: #3c8dbc;
+            color: white;
+            width: 100%;
+            height: 22px;
+            line-height: 22px;
+            padding-left: 15px;
+            font-weight: bold;
+        }
+
+        .header-background {
+            background-color: #3c8dbc;
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            z-index: 1
+        }
+
+        .header-background-gradient {
+            background: linear-gradient(180deg, rgba(255, 255, 255, .3) 0%, rgba(255, 255, 255, 0) 100%);
+            width: 100%;
+            height: 50%;
+            position: absolute;
+            z-index: 2
+        }
+
+        .header-title-wrapper {
+            width: 100%;
+            z-index: 90;
+            height: 100%;
+            padding: 20px;
+            position: absolute;
+            z-index: 3
+        }
+
+        .header-title {
+            color: white;
+            font-size: 25px;
+            font-weight: bold;
+            font-family: Arial;
+        }
+
+        .header-description-wrapper {
+            color: white;
+            float: right;
+            font-family: Arial;
+            padding-top: 5px
+        }
+
+        .header-description-top {
+            font-weight: bold;
+            padding-top: 10px;
+        }
+
+        .header-description-bot {
+            padding-top: 5px;
+            font-size: 15px;
+        }
+
+        .table-wrapper {
+            text-align: left;
+            display: inline-block;
+            min-width: 260px;
+            padding: 50px 40px;
+            font-family: Arial;
+            font-size: 12px;
+            width: 100%
+        }
+
+        .menu-wrapper {
+            background-color: #969696;
+            width: 100%;
+            height: 100%;
+            overflow-x: auto;
+            overflow-y: auto;
+            margin-right: 5px
+        }
+
+        .menu-padding {
+            height: 22px;
+            padding-top: 2px;
+        }
+
+        #tableId {
+            width: 100%;
+            height: 100%;
+        }
+
+        .table-content-container {
+            background-color: white;
+            width: 100%;
+            height: 100%;
+            overflow-x: auto !important;
+            overflow-y: auto !important;
+        }
+
+        .menu-width {
+            width: 200px;
+        }
+
+        .table-content {
+            padding-right: 5px;
+            padding-top: 90px;
+        }
+
+        hr {
+            margin-top: 28px;
+        }
+
+        .save-btn-wrapper {
+            text-align: center;
+        }
+
+        #save-btn {
+            padding: 2px 30px;
+            font-size: 14px;
+        }
+
+        .footer-line-1 {
+            background-color: #000;
+            bottom: 17px;
+            left: 0;
+            width: 100%;
+            height: 1px;
+            position: absolute;
+            z-index: 2323;
+            color: white;
+        }
+
+        .footer-line-2 {
+            background-color: #d0d0d0;
+            bottom: 15px;
+            left: 0;
+            width: 100%;
+            height: 2px;
+            position: absolute;
+            z-index: 2323;
+            color: white;
+        }
+
+        .footer-content-wrapper {
+            background-color: #424242;
+            bottom: 0px;
+            left: 0;
+            width: 100%;
+            height: 15px;
+            position: absolute;
+            z-index: 2323;
+            color: white;
+            line-height: 15px;
+            font-size: 12px;
+            padding-left: 10px;
+            padding-right: 10px;
+        }
+
+        .footer-content-right {
+            float: right;
+        }
+
+        .table-title {
+            font-weight: bold;
+            font-size: 16px
+        }
+    </style>
+</head>
+
+<body onload="onBodyLoad()">
+    <div class="header">
+        <div class="header-background">
+        </div>
+        <div class="header-background-gradient">
+        </div>
+        <table class="header-title-wrapper">
+            <tr>
+                <td>
+                    <div class="header-title">ONTRAK HACHI</div>
+                </td>
+                <td>
+                    <div class="header-description-wrapper">
+                        <div class="header-description-top">
+                            ONTRAK IoTs PLATFORM
+                        </div>
+                        <div class="header-description-bot">
+                            Model: ONTRAK HACHI
+                        </div>
+                    </div>
+                </td>
+            </tr>
+        </table>
+    </div>
+    <div class="line_header">
+    </div>
+    <table class="table_reize" id="tableId">
+        <tbody>
+            <tr class="trResize table_reizetd">
+                <td class="table_reizetd table-content menu-width">
+                    <div class="menu-wrapper">
+                        <div class="menu-padding">
+                        </div>
+                        <div class="div_left_menu">
+                            <a href="home.htm">Home</a>
+                        </div>
+                        <div class="div_left_menu">
+                            <a href="baseconfig.htm">Base Config</a>
+                        </div>
+                        <div class="div_left_menu">
+                            <a href="dhcpconfig.htm">DHCP Config</a>
+                        </div>
+
+                    </div>
+                </td>
+                <td class="table_reizetd table-content">
+                    <div class="table-content-container">
+                        <div class="table-wrapper">
+                            <div id="header">Update Firmware</div>
+                            <hr />
+
+                            <br>
+                            <table>
+                                <tr>
+                                    <th align='left'>Nạp chương trình ESP:</th>
+                                </tr>
+                            </table>
+                            <form method="POST" action="/update" enctype="multipart/form-data">
+                                <input type="file" name="updateesp8266" style="width:100%">
+                                <input type="submit" value="Nạp ESP" style="width:100%; margin-top:5px; padding:5px;">
+                            </form>
+                            <br>
+                            <hr />
+                            <br>
+                            <table>
+                                <tr>
+                                    <th align='left'>Upload File SPIFFS:</th>
+                                </tr>
+                            </table>
+                            <form method="POST" action="/upload" enctype="multipart/form-data">
+                                <input type="file" name="upload" style="width:100%">
+                                <input type="submit" value="Upload File"
+                                    style="width:100%; margin-top:5px; padding:5px;">
+                            </form>
+
+                        </div>
+                    </div>
+                </td>
+            </tr>
+        </tbody>
+    </table>
+    <div class="footer-line-1">
+    </div>
+    <div class="footer-line-2">
+    </div>
+    <div class="footer-content-wrapper">
+        <span>Model ONTRAK HACHI </span>
+        <span class="footer-content-right">© 2025 - Nhatrang Hitech - nhtc.com.vn</span>
+    </div>
+</body>
+
+</html>

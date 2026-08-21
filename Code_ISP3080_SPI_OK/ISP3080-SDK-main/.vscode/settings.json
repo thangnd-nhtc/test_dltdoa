@@ -1,0 +1,15 @@
+{
+    "files.associations": {
+        "deca_device_api.h": "c",
+        "deca_probe_interface.h": "c",
+        "config_options.h": "c",
+        "dw3000.h": "c",
+        "shared_functions.h": "c",
+        "nrfx_spis.h": "c",
+        "deca_spi.h": "c",
+        "nrf_gpio.h": "c",
+        "app_error.h": "c",
+        "main.h": "c",
+        "sdk_config.h": "c"
+    }
+}

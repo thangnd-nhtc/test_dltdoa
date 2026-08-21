@@ -1,0 +1,600 @@
+<html lang="en">
+
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+    <title>Update Firmware</title>
+
+    <script>
+        function onBodyLoad() {
+            let table = document.getElementById('tableId');
+            resizableGrid(table);
+        }
+
+        function resizableGrid(e) {
+            var t = e.getElementsByClassName("trResize")[0], n = t ? t.children : void 0; if (n) {
+                e.style.overflow = "hidden"; for (var i = e.offsetHeight, o = 0; o < n.length; o++) { var r = s(i); n[o].appendChild(r), n[o].style.position = "relative", d(r) }
+            }
+            function d(e) {
+                var t, n, i, o, r; e.addEventListener("mousedown", function (e) {
+                    n = e.target.parentElement, i = n.nextElementSibling, t = e.pageX; var d = function (e) {
+                        if ("border-box" == l(e, "box-sizing")) return 0; var t = l(e, "padding-left"), n = l(e, "padding-right"); return parseInt(t) + parseInt(n)
+                    }(n); o = n.offsetWidth - d, i && (r = i.offsetWidth - d)
+                }), e.addEventListener("mouseover",
+                    function (e) { }), e.addEventListener("mouseout",
+                        function (e) { e.target.style.borderRight = "" }), document.addEventListener("mousemove",
+                            function (e) { if (n) { var d = e.pageX - t; i && (i.style.width = r - d + "px"), n.style.width = o + d + "px" } }),
+                    document.addEventListener("mouseup",
+                        function (e) { n = void 0, i = void 0, t = void 0, r = void 0, o = void 0 })
+            }
+            function s(e) {
+                var t = document.createElement("div");
+
+                t.classList.add('div_resize');
+                return t;
+            } function l(e, t) {
+                return window.getComputedStyle(e, null).getPropertyValue(t)
+            }
+        }
+
+        function uploadFW(formId, url, statusId, barId) {
+            var form = document.getElementById(formId);
+            var fileInput = form.querySelector('input[type="file"]');
+            if (!fileInput.files.length) {
+                alert('Vui lòng chọn file firmware!');
+                return;
+            }
+
+            var statusDiv = document.getElementById(statusId);
+            var barDiv = document.getElementById(barId);
+            var statusText = statusDiv.querySelector('.status-text');
+            statusDiv.style.display = 'block';
+            statusText.textContent = 'Đang tải lên...';
+            barDiv.style.width = '0%';
+            barDiv.style.backgroundColor = '#3c8dbc';
+
+            var formData = new FormData(form);
+            var xhr = new XMLHttpRequest();
+
+            xhr.upload.addEventListener('progress', function(e) {
+                if (e.lengthComputable) {
+                    var pct = Math.round((e.loaded / e.total) * 100);
+                    barDiv.style.width = pct + '%';
+                    statusText.textContent = 'Đang tải lên: ' + pct + '%';
+                }
+            });
+
+            xhr.addEventListener('load', function() {
+                if (xhr.status === 200) {
+                    if (url === '/update_u7') {
+                        statusText.textContent = 'Upload lưu file thành công! Đang tiến hành nạp từ U6 qua UART... Đợi xíu...';
+                        barDiv.style.backgroundColor = '#FF9800'; // Đổi màu chờ
+                        
+                        var pollTimer = setInterval(function() {
+                            fetch('/ota_u7_status')
+                                .then(function(res) { return res.text(); })
+                                .then(function(txt) {
+                                    if (txt === 'SUCCESS') {
+                                        clearInterval(pollTimer);
+                                        statusText.textContent = 'Thành công! U7 nạp xong và chuẩn bị khởi động lại.';
+                                        barDiv.style.backgroundColor = '#4CAF50';
+                                    } else if (txt === 'FAILED') {
+                                        clearInterval(pollTimer);
+                                        statusText.textContent = 'Thất bại! Có lỗi trong khi giao tiếp UART hoặc sai MD5.';
+                                        barDiv.style.backgroundColor = '#f44336';
+                                    } else if (txt === 'IN_PROGRESS') {
+                                        // Ghi chú trạng thái hoặc nhấp nháy chữ đang nạp
+                                        statusText.textContent = 'Upload lưu file thành công! Đang tiến hành nạp từ U6 qua UART... (' + new Date().getSeconds() + 's)';
+                                    }
+                                }).catch(function() {
+                                    // Bỏ qua lỗi Get nếu server phản hồi chậm
+                                });
+                        }, 2000);
+                    } else if (url === '/update_u6') {
+                        barDiv.style.width = '100%';
+                        barDiv.style.backgroundColor = '#4CAF50';
+                        statusText.textContent = 'Thành công! U6 đã nạp xong và đang khởi động lại... Tự động tải lại trang sau 15 giây.';
+                        setTimeout(function() {
+                            window.location.reload();
+                        }, 15000);
+                    } else if (url === '/update_spiffs') {
+                        barDiv.style.width = '100%';
+                        barDiv.style.backgroundColor = '#4CAF50';
+                        statusText.textContent = 'Thành công! SPIFFS đã nạp xong. Thiết bị đang khởi động lại... Tự động tải lại trang sau 15 giây.';
+                        setTimeout(function() {
+                            window.location.reload();
+                        }, 15000);
+                    } else {
+                        barDiv.style.width = '100%';
+                        barDiv.style.backgroundColor = '#4CAF50';
+                        statusText.textContent = 'Upload thành công! ' + xhr.responseText;
+                    }
+                } else {
+                    barDiv.style.backgroundColor = '#f44336';
+                    statusText.textContent = 'Lỗi: ' + xhr.responseText;
+                }
+            });
+
+            xhr.addEventListener('error', function() {
+                barDiv.style.backgroundColor = '#f44336';
+                statusText.textContent = 'Lỗi kết nối!';
+            });
+
+            xhr.open('POST', url);
+            xhr.send(formData);
+        }
+
+    </script>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        .table_reize {
+            border-collapse: collapse;
+        }
+
+        .table_reizetd,
+        .table_reizeth {
+            padding: 5px 15px;
+            text-align: left;
+            padding: 0px
+        }
+
+        .table_reize,
+        .table_reizetd,
+        .table_reizeth {
+            border: 1px solid #000;
+        }
+
+        .header {
+            position: absolute;
+            width: 100%;
+            height: 90px;
+            z-index: 2;
+        }
+
+        .line_header {
+            height: 5px;
+            width: 100%;
+            background-color: #d0d0d0;
+            position: absolute;
+            z-index: 3;
+            top: 90px;
+            border-bottom: solid 1px black;
+        }
+
+        .div_resize {
+            top: 0px;
+            right: 0px;
+            width: 5px;
+            position: absolute;
+            cursor: col-resize;
+            user-select: none;
+            height: 100%;
+            background-color: #d0d0d0;
+        }
+
+        .div_left_menu {
+            background-color: #424242;
+            height: 22px;
+            margin-top: 2px;
+            font-size: 12px;
+            font-family: Arial;
+            line-height: 22px;
+            font-weight: 700;
+            color: white
+        }
+
+        .div_left_menu>a,
+        .div_left_menu_level2>a,
+        .div_active>a {
+            padding-left: 23px
+        }
+
+        .div_left_menu>a:hover,
+        .div_left_menu_level2>a:hover,
+        .div_active>a:hover {
+            color: #3c8dbc;
+            cursor: pointer
+        }
+
+        .div_left_menu_level2 {
+            background-color: #606060;
+            height: 22px;
+            margin-top: 2px;
+            font-size: 12px;
+            font-family: Arial;
+            line-height: 22px;
+            font-weight: 700;
+            color: white
+        }
+
+        .div_left_menu>a,
+        .div_active>a {
+            color: white;
+            text-decoration: none;
+        }
+
+        .div_active {
+            background-color: #2d6c91;
+            height: 22px;
+            margin-top: 2px;
+            font-size: 12px;
+            font-family: Arial;
+            line-height: 22px;
+            font-weight: 700;
+            color: white
+        }
+
+        .tablevalue {
+            font-size: 12px
+        }
+
+        .tablevalue>tbody>tr {
+            height: 30px;
+        }
+
+        .lable {
+            padding-right: 30px;
+            font-weight: bold;
+            width: 500px;
+        }
+
+        .tablevalue>tbody>tr>td>select {
+            width: 200px;
+        }
+
+        .tablevalue>tbody>tr>td>input {
+            width: 200px;
+        }
+
+        .div_left_menu>a,
+        .div_active>a {
+            display: block;
+            width: 100%
+        }
+
+        body {
+            margin: 0px;
+        }
+
+        #header {
+            font-size: 16px;
+            background-color: #3c8dbc;
+            color: white;
+            width: 100%;
+            height: 22px;
+            line-height: 22px;
+            padding-left: 15px;
+            font-weight: bold;
+        }
+
+        .header-background {
+            background-color: #3c8dbc;
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            z-index: 1
+        }
+
+        .header-background-gradient {
+            background: linear-gradient(180deg, rgba(255, 255, 255, .3) 0%, rgba(255, 255, 255, 0) 100%);
+            width: 100%;
+            height: 50%;
+            position: absolute;
+            z-index: 2
+        }
+
+        .header-title-wrapper {
+            width: 100%;
+            z-index: 90;
+            height: 100%;
+            padding: 20px;
+            position: absolute;
+            z-index: 3
+        }
+
+        .header-title {
+            color: white;
+            font-size: 25px;
+            font-weight: bold;
+            font-family: Arial;
+        }
+
+        .header-description-wrapper {
+            color: white;
+            float: right;
+            font-family: Arial;
+            padding-top: 5px
+        }
+
+        .header-description-top {
+            font-weight: bold;
+            padding-top: 10px;
+        }
+
+        .header-description-bot {
+            padding-top: 5px;
+            font-size: 15px;
+        }
+
+        .table-wrapper {
+            text-align: left;
+            display: inline-block;
+            min-width: 260px;
+            padding: 50px 40px;
+            font-family: Arial;
+            font-size: 12px;
+            width: 100%
+        }
+
+        .menu-wrapper {
+            background-color: #969696;
+            width: 100%;
+            height: 100%;
+            overflow-x: auto;
+            overflow-y: auto;
+            margin-right: 5px
+        }
+
+        .menu-padding {
+            height: 22px;
+            padding-top: 2px;
+        }
+
+        #tableId {
+            width: 100%;
+            height: 100%;
+        }
+
+        .table-content-container {
+            background-color: white;
+            width: 100%;
+            height: 100%;
+            overflow-x: auto !important;
+            overflow-y: auto !important;
+        }
+
+        .menu-width {
+            width: 200px;
+        }
+
+        .table-content {
+            padding-right: 5px;
+            padding-top: 90px;
+        }
+
+        hr {
+            margin-top: 28px;
+        }
+
+        .save-btn-wrapper {
+            text-align: center;
+        }
+
+        #save-btn {
+            padding: 2px 30px;
+            font-size: 14px;
+        }
+
+        .footer-line-1 {
+            background-color: #000;
+            bottom: 17px;
+            left: 0;
+            width: 100%;
+            height: 1px;
+            position: absolute;
+            z-index: 2323;
+            color: white;
+        }
+
+        .footer-line-2 {
+            background-color: #d0d0d0;
+            bottom: 15px;
+            left: 0;
+            width: 100%;
+            height: 2px;
+            position: absolute;
+            z-index: 2323;
+            color: white;
+        }
+
+        .footer-content-wrapper {
+            background-color: #424242;
+            bottom: 0px;
+            left: 0;
+            width: 100%;
+            height: 15px;
+            position: absolute;
+            z-index: 2323;
+            color: white;
+            line-height: 15px;
+            font-size: 12px;
+            padding-left: 10px;
+            padding-right: 10px;
+        }
+
+        .footer-content-right {
+            float: right;
+        }
+
+        .table-title {
+            font-weight: bold;
+            font-size: 16px
+        }
+
+        .ota-section {
+            border: 1px solid #ddd;
+            padding: 15px;
+            margin-bottom: 15px;
+            background-color: #fafafa;
+        }
+        .ota-section h3 {
+            margin: 0 0 10px 0;
+            color: #333;
+            font-size: 14px;
+        }
+        .ota-btn {
+            width: 100%;
+            margin-top: 5px;
+            padding: 8px;
+            font-weight: bold;
+            border: none;
+            cursor: pointer;
+            color: white;
+            font-size: 13px;
+        }
+        .ota-status {
+            display: none;
+            margin-top: 8px;
+            padding: 8px;
+            border: 1px solid #ddd;
+            background-color: #f0f0f0;
+            font-size: 12px;
+        }
+        .ota-bar-bg {
+            width: 100%;
+            background-color: #ddd;
+            margin-top: 5px;
+        }
+        .ota-bar {
+            width: 0%;
+            height: 18px;
+            background-color: #3c8dbc;
+            transition: width 0.3s;
+        }
+    </style>
+</head>
+
+<body onload="onBodyLoad()">
+    <div class="header">
+        <div class="header-background">
+        </div>
+        <div class="header-background-gradient">
+        </div>
+        <table class="header-title-wrapper">
+            <tr>
+                <td>
+                    <div class="header-title">ONTRAK HACHI</div>
+                </td>
+                <td>
+                    <div class="header-description-wrapper">
+                        <div class="header-description-top">
+                            ONTRAK IoTs PLATFORM
+                        </div>
+                        <div class="header-description-bot">
+                            Model: ONTRAK HACHI
+                        </div>
+                    </div>
+                </td>
+            </tr>
+        </table>
+    </div>
+    <div class="line_header">
+    </div>
+    <table class="table_reize" id="tableId">
+        <tbody>
+            <tr class="trResize table_reizetd">
+                <td class="table_reizetd table-content menu-width">
+                    <div class="menu-wrapper">
+                        <div class="menu-padding">
+                        </div>
+                        <div class="div_left_menu">
+                            <a href="home.htm">Home</a>
+                        </div>
+                        <div class="div_left_menu">
+                            <a href="baseconfig.htm">Base Config</a>
+                        </div>
+                        <div class="div_left_menu">
+                            <a href="dhcpconfig.htm">DHCP Config</a>
+                        </div>
+                        <div class="div_active">
+                            <a href="update_fw.htm">Update Firmware</a>
+                        </div>
+                        <div class="div_left_menu">
+                            <a href="update_isp.htm">Update ISP3080</a>
+                        </div>
+                    </div>
+                </td>
+                <td class="table_reizetd table-content">
+                    <div class="table-content-container">
+                        <div class="table-wrapper">
+                            <div id="header">Update Firmware U6 / U7</div>
+                            <hr />
+
+                            <!-- ========== OTA U6 (ESP32 Main) ========== -->
+                            <div class="ota-section">
+                                <h3>&#x1F4E1; Nạp Firmware U6 (ESP32 Main)</h3>
+                                <p style="font-size:11px; color:#666; margin:0 0 8px 0;">
+                                    Upload file .bin để nạp trực tiếp vào ESP32 U6. Sau khi nạp xong, thiết bị sẽ tự động khởi động lại.
+                                </p>
+                                <form id="form_u6" enctype="multipart/form-data">
+                                    <input type="file" accept=".bin" name="firmware" style="width:100%">
+                                    <button type="button" class="ota-btn" style="background-color:#2196F3;"
+                                        onclick="uploadFW('form_u6', '/update_u6', 'status_u6', 'bar_u6')">
+                                        &#x26A1; Upload &amp; Nạp U6
+                                    </button>
+                                </form>
+                                <div id="status_u6" class="ota-status">
+                                    <b>Trạng thái:</b> <span class="status-text">---</span>
+                                    <div class="ota-bar-bg"><div id="bar_u6" class="ota-bar"></div></div>
+                                </div>
+                            </div>
+
+                            <!-- ========== SPIFFS U6 ========== -->
+                            <div class="ota-section">
+                                <h3>&#x1F4C1; Nạp SPIFFS U6 (Filesystem)</h3>
+                                <p style="font-size:11px; color:#666; margin:0 0 8px 0;">
+                                    Upload file <b>spiffs.bin</b> để cập nhật filesystem (trang web, config, ...) trên ESP32 U6.
+                                    Sau khi nạp xong, thiết bị sẽ tự khởi động lại.
+                                </p>
+                                <form id="form_spiffs" enctype="multipart/form-data">
+                                    <input type="file" accept=".bin" name="filesystem" style="width:100%">
+                                    <button type="button" class="ota-btn" style="background-color:#9C27B0;"
+                                        onclick="uploadFW('form_spiffs', '/update_spiffs', 'status_spiffs', 'bar_spiffs')">
+                                        &#x1F4C1; Upload &amp; Nạp SPIFFS
+                                    </button>
+                                </form>
+                                <div id="status_spiffs" class="ota-status">
+                                    <b>Trạng thái:</b> <span class="status-text">---</span>
+                                    <div class="ota-bar-bg"><div id="bar_spiffs" class="ota-bar"></div></div>
+                                </div>
+                            </div>
+
+                            <!-- ========== OTA U7 (ESP32 DW) ========== -->
+                            <div class="ota-section">
+                                <h3>&#x1F4E1; Nạp Firmware U7 (ESP32 Decawave)</h3>
+                                <p style="font-size:11px; color:#666; margin:0 0 8px 0;">
+                                    Upload file .bin cho U7. File sẽ được lưu vào thẻ SD, sau đó U6 tự động truyền qua UART để nạp cho U7.
+                                </p>
+                                <form id="form_u7" enctype="multipart/form-data">
+                                    <input type="file" accept=".bin" name="firmware" style="width:100%">
+                                    <button type="button" class="ota-btn" style="background-color:#FF9800;"
+                                        onclick="uploadFW('form_u7', '/update_u7', 'status_u7', 'bar_u7')">
+                                        &#x26A1; Upload &amp; Nạp U7
+                                    </button>
+                                </form>
+                                <div id="status_u7" class="ota-status">
+                                    <b>Trạng thái:</b> <span class="status-text">---</span>
+                                    <div class="ota-bar-bg"><div id="bar_u7" class="ota-bar"></div></div>
+                                </div>
+                            </div>
+
+                        </div>
+                    </div>
+                </td>
+            </tr>
+        </tbody>
+    </table>
+    <div class="footer-line-1">
+    </div>
+    <div class="footer-line-2">
+    </div>
+    <div class="footer-content-wrapper">
+        <span>Model ONTRAK HACHI </span>
+        <span class="footer-content-right">&copy; 2025 - Nhatrang Hitech - nhtc.com.vn</span>
+    </div>
+</body>
+
+</html>

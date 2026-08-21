@@ -1,0 +1,1103 @@
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <script>
+        var HttpClient = function () {
+            this.get = function (aUrl, aCallback) {
+                var anHttpRequest = new XMLHttpRequest();
+                anHttpRequest.onreadystatechange = function () {
+                    if (anHttpRequest.readyState == 4 && anHttpRequest.status == 200)
+                        aCallback(anHttpRequest.responseText);
+                }
+                anHttpRequest.open("GET", aUrl, true);
+                anHttpRequest.send(null);
+            }
+
+            this.post = function (aUrl, data, aCallback) {
+                var anHttpRequest = new XMLHttpRequest();
+                anHttpRequest.onreadystatechange = function () {
+                    if (anHttpRequest.readyState == 4 && anHttpRequest.status == 200)
+                        aCallback(anHttpRequest.responseText);
+                }
+                anHttpRequest.open("POST", aUrl, true);
+                anHttpRequest.setRequestHeader("Content-type", "application/x-www-form-urlencoded");
+                anHttpRequest.send(data);
+            }
+        }
+
+        var client = new HttpClient();
+
+        function getVal(id) {
+            var el = document.getElementById(id);
+            if (!el) return null;
+            if (el.type === "checkbox") return el.checked;
+            return (el.value === "") ? null : (el.type === "number" ? Number(el.value) : el.value);
+        }
+
+        function setVal(id, val) {
+            var el = document.getElementById(id);
+            if (el) {
+                el.value = (val === null || val === undefined) ? "" : val;
+            }
+        }
+
+        function saveHandler() {
+            var myJSON = {};
+            myJSON.cmd = "cfg";
+
+            const fields = [
+                'val_motion', 'val_stand', 'val_sleep1', 'val_sleep2', 'val_sleep3',
+                'val_mode1', 'val_mode2', 'val_mode3',
+                'val_batt_default', 'val_batt_high', 'val_batt_inc',
+                'val_batt_dec', 'broadcast', 'enable_bcast_twr',
+                'val_id_last', 'val_id_new', 'val_id_mode', 'val_id_enable', 'val_request',
+                'uwb_chan', 'uwb_plen', 'uwb_pac', 'uwb_txcode', 'uwb_rxcode',
+                'uwb_sfdtype', 'uwb_datarate', 'uwb_phrmode', 'uwb_phrrate',
+                'uwb_sfdto', 'uwb_stsmode', 'uwb_stslen', 'uwb_pdoa',
+                'mac_address', 'apply_config_to_base', 'charge_tx'
+            ];
+
+            fields.forEach(f => {
+                let v = getVal(f);
+                if (v !== null) {
+                    if (f === 'val_id_mode' || f === 'val_request') myJSON[f] = Number(v);
+                    else if (f === 'val_id_last') {
+                        myJSON[f] = v;
+                        if (v && v !== "") {
+                            myJSON["SerialID"] = v;
+                        }
+                    }
+                    else if (typeof v === 'string' && !isNaN(v) && v !== "") myJSON[f] = Number(v);
+                    else myJSON[f] = v;
+                }
+            });
+
+            var StrJSON = JSON.stringify(myJSON);
+            console.log(StrJSON);
+
+            // Disable button và hiện trạng thái
+            var btn = document.getElementById('save-btn');
+            btn.disabled = true;
+            btn.value = "Dang gui...";
+            g_cancelPolling = false;
+            showCancelBtn(true);
+            showAckStatus("Dang gui lenh cau hinh...", "#ff9800");
+
+            client.post('/beaconconfig', "beaconConfig=" + StrJSON, function (response) {
+                if (response.indexOf("OK") > -1) {
+                    // Phan nhanh: Request Data (val_request >= 1) hay Config binh thuong
+                    var reqVal = getVal('val_request');
+                    if (reqVal >= 1) {
+                        showAckStatus("Dang cho ACK tu ISP3080 (Phase 1/2)...", "#2196F3");
+                        pollAckThenRequest(0);
+                    } else {
+                        showAckStatus("Da gui xong! Dang cho ACK tu ISP3080...", "#2196F3");
+                        pollAckStatus(0);
+                    }
+                } else {
+                    showAckStatus("Loi gui lenh: " + response, "#f44336");
+                    btn.disabled = false;
+                    btn.value = "Save";
+                }
+            });
+        }
+
+        var g_cancelPolling = false;
+
+        function cancelPolling() {
+            g_cancelPolling = true;
+            showAckStatus("Da huy! Ban co the gui lai.", "#ff9800");
+            showCancelBtn(false);
+            document.getElementById('save-btn').disabled = false;
+            document.getElementById('save-btn').value = "Save";
+        }
+
+        function showCancelBtn(show) {
+            var el = document.getElementById('cancel-btn');
+            if (el) el.style.display = show ? 'inline-block' : 'none';
+        }
+
+        var ackPollTimer = null;
+        function pollAckStatus(attempts) {
+            if (g_cancelPolling) return;
+            if (attempts > 300) { // 300 x 2s = 10 phut timeout
+                showAckStatus("Het thoi gian cho phan hoi (10 phut)", "#ff9800");
+                showCancelBtn(false);
+                document.getElementById('save-btn').disabled = false;
+                document.getElementById('save-btn').value = "Save";
+                return;
+            }
+
+            var xhr = new XMLHttpRequest();
+            xhr.open("GET", "/beacon_ack_status", true);
+            xhr.timeout = 3000;
+            xhr.onreadystatechange = function () {
+                if (xhr.readyState == 4 && xhr.status == 200) {
+                    try {
+                        var obj = JSON.parse(xhr.responseText);
+                        if (obj.done === true) {
+                            showAckStatus("THANH CONG! Da nhan du ACK tu TAG. (Bits: " + obj.bits + ")", "#4CAF50");
+                            showCancelBtn(false);
+                            document.getElementById('save-btn').disabled = false;
+                            document.getElementById('save-btn').value = "Save";
+                            return;
+                        } else if (obj.status === "ACKED") {
+                            showAckStatus("Dang phat BLE... Bits: " + obj.bits, "#ff9800");
+                        } else if (obj.status === "PENDING") {
+                            showAckStatus("Dang cho ISP3080 thuc hien...", "#2196F3");
+                        }
+                    } catch (e) { }
+                    // Retry sau 2 giây
+                    ackPollTimer = setTimeout(function () { pollAckStatus(attempts + 1); }, 2000);
+                } else if (xhr.readyState == 4) {
+                    ackPollTimer = setTimeout(function () { pollAckStatus(attempts + 1); }, 2000);
+                }
+            };
+            xhr.send(null);
+        }
+
+        function showAckStatus(msg, color) {
+            var el = document.getElementById('ack-status-box');
+            if (el) {
+                el.innerHTML = msg;
+                el.style.color = color;
+                el.style.display = 'block';
+            }
+        }
+
+        // ---- REQUEST: 2 pha - ACK truoc (CMD99), Request Data sau (CMD97) ----
+        function pollAckThenRequest(attempts) {
+            if (g_cancelPolling) return;
+            if (attempts > 150) { // 150 x 2s = 5 phut timeout Phase 1
+                showAckStatus("Het thoi gian cho ACK (Phase 1) - 5 phut", "#ff9800");
+                showCancelBtn(false);
+                document.getElementById('save-btn').disabled = false;
+                document.getElementById('save-btn').value = "Save";
+                return;
+            }
+            var xhr = new XMLHttpRequest();
+            xhr.open("GET", "/beacon_ack_status", true);
+            xhr.timeout = 3000;
+            xhr.onreadystatechange = function () {
+                if (xhr.readyState == 4 && xhr.status == 200) {
+                    try {
+                        var obj = JSON.parse(xhr.responseText);
+                        if (obj.done === true) {
+                            // Phase 1 DONE -> chuyen sang Phase 2: cho Request Data
+                            showAckStatus("ACK OK! Dang cho Tag tra ve cau hinh (Phase 2/2)...", "#ff9800");
+                            pollRequestData(0);
+                            return;
+                        } else if (obj.status === "ACKED") {
+                            showAckStatus("Dang phat BLE Request... (Phase 1/2) Bits: " + obj.bits, "#ff9800");
+                        } else if (obj.status === "PENDING") {
+                            showAckStatus("Dang cho ISP3080 phat Request BLE (Phase 1/2)...", "#2196F3");
+                        }
+                    } catch (e) { }
+                    setTimeout(function () { pollAckThenRequest(attempts + 1); }, 2000);
+                } else if (xhr.readyState == 4) {
+                    setTimeout(function () { pollAckThenRequest(attempts + 1); }, 2000);
+                }
+            };
+            xhr.send(null);
+        }
+
+        // ---- REQUEST DATA: Polling va Auto-fill ----
+        function pollRequestData(attempts) {
+            if (g_cancelPolling) return;
+            if (attempts > 60) { // 60 x 2s = 2 phut timeout
+                showAckStatus("Het thoi gian cho phan hoi Request Data (2 phut)", "#ff9800");
+                showCancelBtn(false);
+                document.getElementById('save-btn').disabled = false;
+                document.getElementById('save-btn').value = "Save";
+                return;
+            }
+            var xhr = new XMLHttpRequest();
+            xhr.open("GET", "/beacon_request_data", true);
+            xhr.timeout = 3000;
+            xhr.onreadystatechange = function () {
+                if (xhr.readyState == 4 && xhr.status == 200) {
+                    try {
+                        var obj = JSON.parse(xhr.responseText);
+                        if (obj.ready === true) {
+                            fillFormFromRequest(obj);
+                            showAckStatus("OK - Da nhan cau hinh tu Tag va dien vao form!", "#4CAF50");
+                            showCancelBtn(false);
+                            document.getElementById('save-btn').disabled = false;
+                            document.getElementById('save-btn').value = "Save";
+                            return;
+                        }
+                    } catch (e) { }
+                    setTimeout(function () { pollRequestData(attempts + 1); }, 2000);
+                } else if (xhr.readyState == 4) {
+                    setTimeout(function () { pollRequestData(attempts + 1); }, 2000);
+                }
+            };
+            xhr.send(null);
+        }
+
+        function fillFormFromRequest(obj) {
+            // --- 1. Timer / Send Tag ---
+            if (obj.Timer) {
+                setVal('val_motion', obj.Timer.Motion);
+                setVal('val_stand', obj.Timer.Stand);
+                setVal('val_sleep1', obj.Timer.Sleep1);
+                setVal('val_sleep2', obj.Timer.Sleep2);
+                setVal('val_sleep3', obj.Timer.Sleep3);
+                setVal('val_mode1', obj.Timer.Mode1);
+                setVal('val_mode2', obj.Timer.Mode2);
+                setVal('val_mode3', obj.Timer.Mode3);
+            }
+            // --- 2. Battery ---
+            if (obj.Timer) {
+                setVal('val_batt_default', obj.Timer.BattDef);
+                setVal('val_batt_high', obj.Timer.BattHigh);
+                setVal('val_batt_inc', obj.Timer.BattInc);
+                setVal('val_batt_dec', obj.Timer.BattDec);
+            }
+            // --- 3. UWB Config ---
+            // Chi +1 cho cac o SELECT co option "None" (value=0) o dau
+            // Cac o INPUT NUMBER (txcode, rxcode, sfdto) giu nguyen
+            if (obj.Config) {
+                setVal('uwb_chan', obj.Config.Chan + 1);       // select
+                setVal('uwb_plen', obj.Config.Plen + 1);       // select
+                setVal('uwb_pac', obj.Config.PAC + 1);         // select
+                setVal('uwb_txcode', obj.Config.TxCode);        // input number
+                setVal('uwb_rxcode', obj.Config.RxCode);        // input number
+                setVal('uwb_sfdtype', obj.Config.SFDType);  // select
+                setVal('uwb_datarate', obj.Config.DataRate + 1);// select
+                setVal('uwb_phrmode', obj.Config.PHRMode + 1);  // select
+                setVal('uwb_phrrate', obj.Config.PHRRate + 1);  // select
+                setVal('uwb_sfdto', obj.Config.SFDTO);          // input number
+                setVal('uwb_stsmode', obj.Config.STSMode + 1);  // select
+                setVal('uwb_stslen', obj.Config.STSLen + 1);    // select
+                setVal('uwb_pdoa', obj.Config.PDOA);        // select
+            }
+            // --- 4. ID Tag ---
+            if (obj.ID_Tag && obj.ID_Tag.ID) {
+                setVal('mac_address', obj.ID_Tag.ID);
+            }
+            // State (val_id_mode) - select nay KHONG co "None", bat dau tu 0=Default
+            if (obj.State !== undefined) {
+                setVal('val_id_mode', obj.State);
+            }
+        }
+
+        function toggleIdNew() {
+            var enable = document.getElementById('val_id_enable').checked;
+            document.getElementById('row_id_new').style.setProperty('display', enable ? 'table-row' : 'none', 'important');
+        }
+
+        function toggleBroadcast() {
+            var isBroadcast = document.getElementById('broadcast').checked;
+            var valIdLast = document.getElementById('val_id_last');
+            if (isBroadcast) {
+                valIdLast.value = "FFFFFFFFFF";
+                valIdLast.disabled = true;
+            } else {
+                valIdLast.disabled = false;
+            }
+        }
+
+        function onBodyLoad() {
+            let table = document.getElementById('tableId');
+            resizableGrid(table);
+
+            client.get('/beaconconfig', function (response) {
+                console.log(response);
+                var obj = JSON.parse(response);
+
+                setVal('val_motion', obj.val_motion);
+                setVal('val_stand', obj.val_stand);
+                setVal('val_sleep1', obj.val_sleep1);
+                setVal('val_sleep2', obj.val_sleep2);
+                setVal('val_sleep3', obj.val_sleep3);
+                setVal('val_mode1', obj.val_mode1);
+                setVal('val_mode2', obj.val_mode2);
+                setVal('val_mode3', obj.val_mode3);
+
+                setVal('val_batt_default', obj.val_batt_default);
+                setVal('val_batt_high', obj.val_batt_high);
+                setVal('val_batt_inc', obj.val_batt_inc);
+                setVal('val_batt_dec', obj.val_batt_dec);
+
+                setVal('val_id_last', obj.SerialID || obj.val_id_last);
+                setVal('val_id_new', obj.val_id_new);
+                setVal('val_id_mode', obj.val_id_mode);
+                setVal('val_request', obj.val_request);
+                setVal('charge_tx', obj.charge_tx);
+
+                // Initialize ID New visibility
+                if (obj.val_id_new && obj.val_id_new !== "") {
+                    document.getElementById('val_id_enable').checked = true;
+                    toggleIdNew();
+                }
+
+                // Initialize Broadcast
+                if (obj.broadcast) {
+                    document.getElementById('broadcast').checked = true;
+                    toggleBroadcast();
+                }
+
+                if (obj.enable_bcast_twr) {
+                    document.getElementById('enable_bcast_twr').checked = true;
+                }
+
+                setVal('uwb_chan', obj.uwb_chan);
+                setVal('uwb_plen', obj.uwb_plen);
+                setVal('uwb_pac', obj.uwb_pac);
+                setVal('uwb_txcode', obj.uwb_txcode);
+                setVal('uwb_rxcode', obj.uwb_rxcode);
+                setVal('uwb_sfdtype', obj.uwb_sfdtype);
+                setVal('uwb_datarate', obj.uwb_datarate);
+                setVal('uwb_phrmode', obj.uwb_phrmode);
+                setVal('uwb_phrrate', obj.uwb_phrrate);
+                setVal('uwb_sfdto', obj.uwb_sfdto);
+                setVal('uwb_stsmode', obj.uwb_stsmode);
+                setVal('uwb_stslen', obj.uwb_stslen);
+                setVal('uwb_pdoa', obj.uwb_pdoa);
+                setVal('mac_address', obj.mac_address);
+                document.getElementById('apply_config_to_base').checked = obj.apply_config_to_base ? true : false;
+            });
+        }
+
+        function resizableGrid(e) {
+            var t = e.getElementsByClassName("trResize")[0], n = t ? t.children : void 0; if (n) {
+                e.style.overflow = "hidden"; for (var i = e.offsetHeight, o = 0; o < n.length; o++) { var r = s(i); n[o].appendChild(r), n[o].style.position = "relative", d(r) }
+            }
+            function d(e) {
+                var t, n, i, o, r; e.addEventListener("mousedown", function (e) {
+                    n = e.target.parentElement, i = n.nextElementSibling, t = e.pageX; var d = function (e) {
+                        if ("border-box" == l(e, "box-sizing")) return 0; var t = l(e, "padding-left"), n = l(e, "padding-right"); return parseInt(t) + parseInt(n)
+                    }(n); o = n.offsetWidth - d, i && (r = i.offsetWidth - d)
+                }), e.addEventListener("mouseover",
+                    function (e) { }), e.addEventListener("mouseout",
+                        function (e) { e.target.style.borderRight = "" }), document.addEventListener("mousemove",
+                            function (e) { if (n) { var d = e.pageX - t; i && (i.style.width = r - d + "px"), n.style.width = o + d + "px" } }),
+                    document.addEventListener("mouseup",
+                        function (e) { n = void 0, i = void 0, t = void 0, r = void 0, o = void 0 })
+            }
+            function s(e) {
+                var t = document.createElement("div");
+                t.classList.add('div_resize');
+                return t;
+            } function l(e, t) {
+                return window.getComputedStyle(e, null).getPropertyValue(t);
+            }
+        }
+    </script>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        .table_reize {
+            border-collapse: collapse;
+        }
+
+        .table_reizetd,
+        .table_reizeth {
+            padding: 5px 15px;
+            text-align: left;
+            padding: 0px
+        }
+
+        .table_reize,
+        .table_reizetd,
+        .table_reizeth {
+            border: 1px solid #000;
+        }
+
+        .header {
+            position: absolute;
+            width: 100%;
+            height: 90px;
+            z-index: 2;
+        }
+
+        .line_header {
+            height: 5px;
+            width: 100%;
+            background-color: #d0d0d0;
+            position: absolute;
+            z-index: 3;
+            top: 90px;
+            border-bottom: solid 1px black;
+        }
+
+        .div_resize {
+            top: 0px;
+            right: 0px;
+            width: 5px;
+            position: absolute;
+            cursor: col-resize;
+            user-select: none;
+            height: 100%;
+            background-color: #d0d0d0;
+        }
+
+        .div_left_menu {
+            background-color: #424242;
+            height: 22px;
+            margin-top: 2px;
+            font-size: 12px;
+            font-family: Arial;
+            line-height: 22px;
+            font-weight: 700;
+            color: white
+        }
+
+        .div_left_menu>a,
+        .div_left_menu_level2>a,
+        .div_active>a {
+            padding-left: 23px
+        }
+
+        .div_left_menu>a:hover,
+        .div_left_menu_level2>a:hover,
+        .div_active>a:hover {
+            color: #3c8dbc;
+            cursor: pointer
+        }
+
+        .div_left_menu_level2 {
+            background-color: #606060;
+            height: 22px;
+            margin-top: 2px;
+            font-size: 12px;
+            font-family: Arial;
+            line-height: 22px;
+            font-weight: 700;
+            color: white
+        }
+
+        .div_left_menu>a,
+        .div_active>a {
+            color: white;
+            text-decoration: none;
+        }
+
+        .div_active {
+            background-color: #2d6c91;
+            height: 22px;
+            margin-top: 2px;
+            font-size: 12px;
+            font-family: Arial;
+            line-height: 22px;
+            font-weight: 700;
+            color: white
+        }
+
+        .div_active>a {
+            color: white !important;
+            text-decoration: none;
+        }
+
+        .tablevalue {
+            font-size: 11px;
+            border: none !important;
+        }
+
+        .tablevalue td {
+            border: none !important;
+        }
+
+        .tablevalue>tbody>tr {
+            height: 28px;
+        }
+
+        .lable {
+            padding-right: 12px;
+            font-weight: bold;
+            width: 140px;
+            text-align: right;
+            color: black;
+        }
+
+        .tablevalue select,
+        .tablevalue input {
+            width: 90px;
+            font-size: 11px;
+        }
+
+        .div_left_menu>a {
+            display: block;
+            width: 100%
+        }
+
+        body {
+            margin: 0px;
+        }
+
+        #header_section {
+            font-size: 16px;
+            background-color: #3c8dbc;
+            color: white;
+            width: 100%;
+            height: 22px;
+            line-height: 22px;
+            padding-left: 15px;
+            font-weight: bold;
+        }
+
+        .header-background {
+            background-color: #3c8dbc;
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            z-index: 1
+        }
+
+        .header-background-gradient {
+            background: linear-gradient(180deg, rgba(255, 255, 255, .3) 0%, rgba(255, 255, 255, 0) 100%);
+            width: 100%;
+            height: 50%;
+            position: absolute;
+            z-index: 2
+        }
+
+        .header-title-wrapper {
+            width: 100%;
+            z-index: 90;
+            height: 100%;
+            padding: 20px;
+            position: absolute;
+            z-index: 3
+        }
+
+        .header-title {
+            color: white;
+            font-size: 25px;
+            font-weight: bold;
+            font-family: Arial;
+        }
+
+        .header-description-wrapper {
+            color: white;
+            float: right;
+            font-family: Arial;
+            padding-top: 5px
+        }
+
+        .header-description-top {
+            font-weight: bold;
+            padding-top: 10px;
+        }
+
+        .header-description-bot {
+            padding-top: 5px;
+            font-size: 15px;
+        }
+
+        .table-wrapper {
+            text-align: left;
+            display: inline-block;
+            min-width: 260px;
+            padding: 20px 15px;
+            font-family: Arial;
+            font-size: 12px;
+            width: 100%
+        }
+
+        .menu-wrapper {
+            background-color: #969696;
+            width: 100%;
+            height: 100%;
+            overflow-x: auto;
+            overflow-y: auto;
+            margin-right: 5px
+        }
+
+        .menu-padding {
+            height: 22px;
+            padding-top: 2px;
+        }
+
+        #tableId {
+            width: 100%;
+            height: 100%;
+        }
+
+        .table-content-container {
+            background-color: white;
+            width: 100%;
+            height: 100%;
+            overflow-x: auto !important;
+            overflow-y: auto !important;
+        }
+
+        .menu-width {
+            width: 200px;
+        }
+
+        .table-content {
+            padding-right: 5px;
+            padding-top: 90px;
+        }
+
+        hr {
+            margin-top: 10px;
+        }
+
+        .save-btn-wrapper {
+            text-align: center;
+            margin-top: 15px;
+        }
+
+        #save-btn {
+            padding: 2px 30px;
+            font-size: 14px;
+        }
+
+        .row-wrapper {
+            height: 22px;
+        }
+
+        .footer-line-1 {
+            background-color: #000;
+            bottom: 17px;
+            left: 0;
+            width: 100%;
+            height: 1px;
+            position: absolute;
+            z-index: 2323;
+            color: white;
+        }
+
+        .footer-line-2 {
+            background-color: #d0d0d0;
+            bottom: 15px;
+            left: 0;
+            width: 100%;
+            height: 2px;
+            position: absolute;
+            z-index: 2323;
+            color: white;
+        }
+
+        .footer-content-wrapper {
+            background-color: #424242;
+            bottom: 0px;
+            left: 0;
+            width: 100%;
+            height: 15px;
+            position: absolute;
+            z-index: 2323;
+            color: white;
+            line-height: 15px;
+            font-size: 12px;
+            padding-left: 10px;
+            padding-right: 10px;
+        }
+
+        .footer-content-right {
+            float: right;
+        }
+
+        .columns-container {
+            display: flex;
+            gap: 10px;
+        }
+
+        .column {
+            flex: 1;
+            border-right: 1px solid #eee;
+            padding: 0 5px;
+        }
+
+        .column:last-child {
+            border-right: none;
+        }
+
+        .col-title {
+            font-size: 15px;
+            font-weight: bold;
+            margin-bottom: 10px;
+            border-bottom: 2px solid #3c8dbc;
+            padding-bottom: 5px;
+            color: black;
+        }
+
+        .section-tag {
+            background: #f8f8f8;
+            font-weight: bold;
+            padding: 4px 8px;
+            margin: 15px 0 8px 0;
+            font-size: 10px;
+            color: #666;
+            border-left: 3px solid #ccc;
+        }
+
+        .div_active>a {
+            color: white;
+            text-decoration: none;
+        }
+    </style>
+
+</head>
+
+
+<body onload="onBodyLoad()">
+    <div class="header">
+        <div class="header-background">
+        </div>
+        <div class="header-background-gradient">
+        </div>
+        <table class="header-title-wrapper">
+            <tr>
+                <td>
+                    <div class="header-title">ONTRAK HACHI</div>
+                </td>
+                <td>
+                    <div class="header-description-wrapper">
+                        <div class="header-description-top">
+                            ONTRAK IoTs PLATFORM
+                        </div>
+                        <div class="header-description-bot">
+                            Model: ONTRAK HACHI
+                        </div>
+                    </div>
+                </td>
+            </tr>
+        </table>
+    </div>
+    <div class="line_header">
+    </div>
+    <table class="table_reize" id="tableId">
+        <tbody>
+            <tr class="trResize table_reizetd">
+                <td class="table_reizetd table-content menu-width">
+                    <div class="menu-wrapper">
+                        <div class="menu-padding">
+                        </div>
+                        <div class="div_left_menu">
+                            <a href="home.htm">Home</a>
+                        </div>
+                        <div class="div_left_menu">
+                            <a href="baseconfig.htm">Base Config</a>
+                        </div>
+                        <div class="div_left_menu">
+                            <a href="dhcpconfig.htm">DHCP Config</a>
+                        </div>
+
+
+                    </div>
+                </td>
+                <td class="table_reizetd table-content">
+                    <div class="table-content-container">
+                        <div class="table-wrapper">
+                            <div id="header_section">
+                                ID Configuration
+                            </div>
+                            <hr />
+
+                            <div class="columns-container">
+                                <!-- COLUMN 1: Timer -->
+                                <div class="column">
+                                    <div class="col-title">Timer</div>
+
+                                    <div class="section-tag">SEND TAG</div>
+                                    <table class="tablevalue" width="100%">
+                                        <tr class="row-wrapper">
+                                            <td class="lable">MOTION:</td>
+                                            <td><input type="number" id="val_motion"></td>
+                                        </tr>
+                                        <tr class="row-wrapper">
+                                            <td class="lable">STAND:</td>
+                                            <td><input type="number" id="val_stand"></td>
+                                        </tr>
+                                        <tr class="row-wrapper">
+                                            <td class="lable">SLEEP_MODE_1:</td>
+                                            <td><input type="number" id="val_sleep1"></td>
+                                        </tr>
+                                        <tr class="row-wrapper">
+                                            <td class="lable">SLEEP_MODE_2:</td>
+                                            <td><input type="number" id="val_sleep2"></td>
+                                        </tr>
+                                        <tr class="row-wrapper">
+                                            <td class="lable">SLEEP_MODE_3:</td>
+                                            <td><input type="number" id="val_sleep3"></td>
+                                        </tr>
+                                    </table>
+
+                                    <div class="section-tag">SLEEP</div>
+                                    <table class="tablevalue" width="100%">
+                                        <tr class="row-wrapper">
+                                            <td class="lable">MODE_1:</td>
+                                            <td><input type="number" id="val_mode1"></td>
+                                        </tr>
+                                        <tr class="row-wrapper">
+                                            <td class="lable">MODE_2:</td>
+                                            <td><input type="number" id="val_mode2"></td>
+                                        </tr>
+                                        <tr class="row-wrapper">
+                                            <td class="lable">MODE_3:</td>
+                                            <td><input type="number" id="val_mode3"></td>
+                                        </tr>
+                                    </table>
+                                </div>
+
+                                <!-- COLUMN 2: ID/ Chức năng tag -->
+                                <div class="column">
+                                    <div class="col-title">ID/Tag Function</div>
+
+                                    <table class="tablevalue" width="100%">
+                                        <tr class="row-wrapper">
+                                            <td class="lable">Broadcast (All Tags):</td>
+                                            <td><input type="checkbox" id="broadcast" onchange="toggleBroadcast()"></td>
+                                        </tr>
+                                        <tr class="row-wrapper">
+                                            <td class="lable" style="color:blue">Enable Broadcast TWR:</td>
+                                            <td><input type="checkbox" id="enable_bcast_twr"></td>
+                                        </tr>
+                                        <tr class="row-wrapper">
+                                            <td class="lable">ID:</td>
+                                            <td><input type="text" id="val_id_last"></td>
+                                        </tr>
+                                        <tr class="row-wrapper">
+                                            <td class="lable">Change ID:</td>
+                                            <td><input type="checkbox" id="val_id_enable" onchange="toggleIdNew()"></td>
+                                        </tr>
+                                        <tr class="row-wrapper" id="row_id_new" style="display:none !important">
+                                            <td class="lable">ID New:</td>
+                                            <td><input type="text" id="val_id_new"></td>
+                                        </tr>
+                                        <tr class="row-wrapper">
+                                            <td class="lable">Setting Mode:</td>
+                                            <td>
+                                                <select id="val_id_mode">
+                                                    <option value="0">Default</option>
+                                                    <option value="1">TX</option>
+                                                    <option value="2">OFF</option>
+                                                    <option value="3">SOS</option>
+                                                    <option value="4">Turn On LED</option>
+                                                    <option value="5">DS TWR</option>
+                                                    <option value="6">RESET</option>
+                                                    <option value="7">AIRPLAN</option>
+                                                    <option value="8">MOTION</option>
+                                                </select>
+                                            </td>
+                                        </tr>
+                                        <tr class="row-wrapper">
+                                            <td class="lable">Request Mode:</td>
+                                            <td>
+                                                <select id="val_request">
+                                                    <option value="0">None</option>
+                                                    <option value="1">Timer (0x00)</option>
+                                                    <option value="2">Config (0x10)</option>
+                                                    <option value="3">State (0x20)</option>
+                                                    <option value="4">ID Tag (0xEE)</option>
+                                                </select>
+                                            </td>
+                                        </tr>
+                                        <tr class="row-wrapper">
+                                            <td class="lable">CHARGE TX:</td>
+                                            <td>
+                                                <select id="charge_tx">
+                                                    <option value="0">Ignore</option>
+                                                    <option value="1">OFF (0x00)</option>
+                                                    <option value="2">ON (0xFF)</option>
+                                                </select>
+                                            </td>
+                                        </tr>
+                                    </table>
+
+
+                                    <div class="section-tag">TIMER: BATT</div>
+                                    <table class="tablevalue" width="100%">
+                                        <tr class="row-wrapper">
+                                            <td class="lable">DEFAULT:</td>
+                                            <td><input type="number" id="val_batt_default"></td>
+                                        </tr>
+                                        <tr class="row-wrapper">
+                                            <td class="lable">HIGH:</td>
+                                            <td><input type="number" id="val_batt_high"></td>
+                                        </tr>
+                                        <tr class="row-wrapper">
+                                            <td class="lable">INCREASE:</td>
+                                            <td><input type="number" id="val_batt_inc"></td>
+                                        </tr>
+                                        <tr class="row-wrapper">
+                                            <td class="lable">DECREASE:</td>
+                                            <td><input type="number" id="val_batt_dec"></td>
+                                        </tr>
+                                    </table>
+                                </div>
+
+                                <!-- COLUMN 3: Cấu hình -->
+                                <div class="column">
+                                    <div class="col-title">Configuration</div>
+                                    <div class="section-tag">DWT Config</div>
+                                    <table class="tablevalue" width="100%">
+                                        <tr class="row-wrapper">
+                                            <td class="lable" style="color:red">Apply to Base:</td>
+                                            <td><input type="checkbox" id="apply_config_to_base"></td>
+                                        </tr>
+                                        <tr class="row-wrapper">
+                                            <td class="lable">.chan:</td>
+                                            <td>
+                                                <select id="uwb_chan">
+                                                    <option value="0">None</option>
+                                                    <option value="1">Channel 5</option>
+                                                    <option value="2">Channel 9</option>
+                                                </select>
+                                            </td>
+                                        </tr>
+                                        <tr class="row-wrapper">
+                                            <td class="lable">.txPreambLen:</td>
+                                            <td>
+                                                <select id="uwb_plen">
+                                                    <option value="0">None</option>
+                                                    <option value="1">4096</option>
+                                                    <option value="2">2048</option>
+                                                    <option value="3">1536</option>
+                                                    <option value="4">1024</option>
+                                                    <option value="5">512</option>
+                                                    <option value="6">256</option>
+                                                    <option value="7">128</option>
+                                                    <option value="8">72</option>
+                                                    <option value="9">64</option>
+                                                    <option value="10">32</option>
+                                                </select>
+                                            </td>
+                                        </tr>
+                                        <tr class="row-wrapper">
+                                            <td class="lable">.rxPAC:</td>
+                                            <td>
+                                                <select id="uwb_pac">
+                                                    <option value="0">None</option>
+                                                    <option value="1">PAC 8</option>
+                                                    <option value="2">PAC 16</option>
+                                                    <option value="3">PAC 32</option>
+                                                    <option value="4">PAC 64</option>
+                                                </select>
+                                            </td>
+                                        </tr>
+                                        <tr class="row-wrapper">
+                                            <td class="lable">.txCode:</td>
+                                            <td><input type="number" id="uwb_txcode"></td>
+                                        </tr>
+                                        <tr class="row-wrapper">
+                                            <td class="lable">.rxCode:</td>
+                                            <td><input type="number" id="uwb_rxcode"></td>
+                                        </tr>
+                                        <tr class="row-wrapper">
+                                            <td class="lable">.sfdType:</td>
+                                            <td>
+                                                <select id="uwb_sfdtype">
+                                                    <option value="0">None</option>
+                                                    <option value="1">DW 8-bit</option>
+                                                    <option value="2">DW 16-bit</option>
+                                                    <option value="3">4z BPRF</option>
+                                                </select>
+                                            </td>
+                                        </tr>
+                                        <tr class="row-wrapper">
+                                            <td class="lable">.dataRate:</td>
+                                            <td>
+                                                <select id="uwb_datarate">
+                                                    <option value="0">None</option>
+                                                    <option value="1">850K</option>
+                                                    <option value="2">6M8</option>
+                                                    <option value="3">NODATA</option>
+                                                </select>
+                                            </td>
+                                        </tr>
+                                        <tr class="row-wrapper">
+                                            <td class="lable">.phrMode:</td>
+                                            <td>
+                                                <select id="uwb_phrmode">
+                                                    <option value="0">None</option>
+                                                    <option value="1">Standard</option>
+                                                    <option value="2">Extended</option>
+                                                </select>
+                                            </td>
+                                        </tr>
+                                        <tr class="row-wrapper">
+                                            <td class="lable">.phrRate:</td>
+                                            <td>
+                                                <select id="uwb_phrrate">
+                                                    <option value="0">None</option>
+                                                    <option value="1">STD</option>
+                                                    <option value="2">DTA</option>
+                                                </select>
+                                            </td>
+                                        </tr>
+                                        <tr class="row-wrapper">
+                                            <td class="lable">.sfdTO:</td>
+                                            <td><input type="number" id="uwb_sfdto"></td>
+                                        </tr>
+                                        <tr class="row-wrapper">
+                                            <td class="lable">.stsMode:</td>
+                                            <td>
+                                                <select id="uwb_stsmode">
+                                                    <option value="0">None</option>
+                                                    <option value="1">OFF</option>
+                                                    <option value="2">Mode 1</option>
+                                                    <option value="3">Mode 2</option>
+                                                    <option value="4">ND</option>
+                                                    <option value="5">SDC</option>
+                                                    <option value="6">CONFIG_MASK</option>
+                                                </select>
+                                            </td>
+                                        </tr>
+                                        <tr class="row-wrapper">
+                                            <td class="lable">.stsLength:</td>
+                                            <td>
+                                                <select id="uwb_stslen">
+                                                    <option value="0">None</option>
+                                                    <option value="1">32</option>
+                                                    <option value="2">64</option>
+                                                    <option value="3">128</option>
+                                                    <option value="4">256</option>
+                                                    <option value="5">512</option>
+                                                    <option value="6">1024</option>
+                                                    <option value="7">2048</option>
+                                                </select>
+                                            </td>
+                                        </tr>
+                                        <tr class="row-wrapper">
+                                            <td class="lable">.pdoaMode:</td>
+                                            <td>
+                                                <select id="uwb_pdoa">
+                                                    <option value="0">None</option>
+                                                    <option value="1">M0</option>
+                                                    <option value="2">M1</option>
+                                                    <option value="3">M3</option>
+                                                </select>
+                                            </td>
+                                        </tr>
+                                        <tr class="row-wrapper">
+                                            <td class="lable">MAC Address:</td>
+                                            <td><input type="text" id="mac_address" maxlength="10"
+                                                    placeholder="VD: 1023ABCDEF" style="text-transform:uppercase"></td>
+                                        </tr>
+                                    </table>
+                                </div>
+                            </div>
+
+                            <hr />
+                            <div id="ack-status-box"
+                                style="display:none; text-align:center; padding:10px; margin:10px 0; font-size:14px; font-weight:bold; border-radius:5px; background:#f5f5f5; border:1px solid #ddd;">
+                            </div>
+                            <div class="save-btn-wrapper" style="text-align:center; margin:10px 0;">
+                                <input id="save-btn" type="button" value="Save" onclick="saveHandler()" style="min-width:100px; padding:8px 20px;">
+                                <input id="cancel-btn" type="button" value="Huy" onclick="cancelPolling()" style="display:none; min-width:80px; padding:8px 16px; margin-left:10px; background:#f44336; color:#fff; border:none; border-radius:4px; cursor:pointer; font-weight:bold;">
+                            </div>
+                        </div>
+                    </div>
+                </td>
+            </tr>
+        </tbody>
+    </table>
+    <div class="footer-line-1">
+    </div>
+    <div class="footer-line-2">
+    </div>
+    <div class="footer-content-wrapper">
+        <span>Model ONTRAK HACHI </span>
+        <span class="footer-content-right">© 2025 - Nhatrang Hitech - nhtc.com.vn</span>
+    </div>
+</body>
+
+</html>
